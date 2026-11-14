@@ -1,0 +1,29 @@
+{
+ "corpus": {
+  "n": 120000,
+  "seed": "42 + index",
+  "steps": 4
+ },
+ "tabs": [
+  {
+   "name": "Image stream, layer 6",
+   "key": "img_6",
+   "n": 258
+  },
+  {
+   "name": "Text stream, layer 6",
+   "key": "txt_6",
+   "n": 261
+  },
+  {
+   "name": "Image stream, layer 12",
+   "key": "img_12",
+   "n": 264
+  },
+  {
+   "name": "Text stream, layer 12",
+   "key": "txt_12",
+   "n": 256
+  }
+ ]
+}

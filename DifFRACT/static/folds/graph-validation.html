@@ -1,0 +1,20 @@
+<h4>What a pruned graph accounts for</h4>
+<p>Before pruning, the contributions sum to the explained quantity up to the extraction thresholds: the median relative residual is 6.5% for image targets and 4.2% for text targets, and 10.9% and 8.3% after pruning. The shares of the explained quantity, in percent, mean over targets:</p>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Targets</th><th class="num">Feature vertices</th><th class="num">Error vertices</th><th class="num">Input vertices</th><th class="num">Threshold residual</th><th class="num">Pruning loss</th></tr></thead>
+  <tbody>
+    <tr><td>Image stream (51)</td><td class="num">46.1</td><td class="num">30.1</td><td class="num">11.9</td><td class="num">7.5</td><td class="num">4.4</td></tr>
+    <tr><td>Text stream (35)</td><td class="num">84.1</td><td class="num">3.5</td><td class="num">5.9</td><td class="num">0.7</td><td class="num">5.8</td></tr>
+    <tr><td>All (86)</td><td class="num">61.6</td><td class="num">19.3</td><td class="num">9.5</td><td class="num">4.7</td><td class="num">5.0</td></tr>
+  </tbody>
+</table></div>
+<h4>How the ablation test works</h4>
+<p>For each of the 86 targets we take the per-position graph after compaction, rank its feature vertices by their total influence on the other feature vertices, <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∑</mo><mrow><mi>t</mi><mo mathvariant="normal">≠</mo><mi>v</mi></mrow></msub><mi mathvariant="normal">∣</mi><msub><mi>B</mi><mrow><mi>v</mi><mo separator="true">,</mo><mi>t</mi></mrow></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">\sum_{t \neq v} |B_{v, t}|</annotation></semantics></math></span>, and keep the top 30. Each is ablated in the <em>original</em> FLUX.1 [schnell], at its own position: a hook subtracts its activation times its decoder vector from the MLP output there. Then the preactivation of every other vertex of the set is read again. This gives 870 ordered pairs per graph, each with an actual effect <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mi mathvariant="normal">Δ</mi><msub><mi>h</mi><mi>t</mi></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|\Delta h_t|</annotation></semantics></math></span> and the effect the graph predicts, <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>B</mi><mrow><mi>v</mi><mo separator="true">,</mo><mi>t</mi></mrow></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|B_{v, t}|</annotation></semantics></math></span>. The two are in different units, so they are compared by rank and by linear correlation.</p>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th></th><th>Image targets, mean</th><th>median</th><th>range</th><th>Text targets, mean</th><th>median</th><th>range</th></tr></thead>
+  <tbody>
+    <tr><td>Spearman <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi></mrow><annotation encoding="application/x-tex">\rho</annotation></semantics></math></span></td><td>0.676</td><td>0.693</td><td>0.346 to 0.895</td><td>0.545</td><td>0.563</td><td>0.323 to 0.730</td></tr>
+    <tr><td>Pearson <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span></td><td>0.769</td><td>0.778</td><td>0.610 to 0.910</td><td>0.744</td><td>0.764</td><td>0.368 to 0.931</td></tr>
+  </tbody>
+</table></div>
+<p>Ablating in the replacement model would agree with the graph by definition. Ablating in the original model measures the gap between the two. Pearson exceeds Spearman because the few high-influence pairs, which dominate a linear correlation, are predicted well, while pairs of similar low predicted influence can differ in actual effect by an order of magnitude.</p>

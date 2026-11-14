@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DifFRACT: Circuit Tracing for Diffusion Transformers</title>
+<meta name="description" content="DifFRACT traces circuits inside a diffusion transformer: which features of the prompt and of the forming image build a given feature of FLUX.1 [schnell] at a given denoising step, tested by interventions during generation. NeurIPS 2026.">
+<meta property="og:title" content="DifFRACT: Diffusion Feature Reconstruction and Attribution for Circuit Tracing">
+<meta property="og:description" content="Attribution graphs over interpretable features of FLUX.1 [schnell]: which features of the prompt and of the forming image build a given feature, at each denoising step.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://artalmaz31.github.io/DifFRACT/static/img/og.jpg">
+<meta property="og:url" content="https://artalmaz31.github.io/DifFRACT/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="static/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400;1,6..72,500;1,6..72,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/css/site.css">
+<link rel="modulepreload" href="static/js/app.js">
+<link rel="preload" href="static/data/exhibits.json" as="fetch" crossorigin>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <clipPath id="logo-a"><circle cx="16" cy="16" r="14"/></clipPath>
+    <clipPath id="logo-b"><circle cx="32" cy="16" r="14"/></clipPath>
+  </defs>
+  <!-- the two streams, and where they meet their colors alternate in stripes -->
+  <symbol id="logo" viewBox="0 0 48 32">
+    <circle cx="16" cy="16" r="14" fill="#de7a1c"/>
+    <circle cx="32" cy="16" r="14" fill="#2d6cdf"/>
+    <g clip-path="url(#logo-a)"><g clip-path="url(#logo-b)">
+      <rect x="0" y="0" width="48" height="32" fill="#2d6cdf"/>
+      <rect x="0" y="0" width="48" height="2" fill="#de7a1c"/><rect x="0" y="4" width="48" height="2" fill="#de7a1c"/><rect x="0" y="8" width="48" height="2" fill="#de7a1c"/><rect x="0" y="12" width="48" height="2" fill="#de7a1c"/><rect x="0" y="16" width="48" height="2" fill="#de7a1c"/><rect x="0" y="20" width="48" height="2" fill="#de7a1c"/><rect x="0" y="24" width="48" height="2" fill="#de7a1c"/><rect x="0" y="28" width="48" height="2" fill="#de7a1c"/>
+    </g></g>
+  </symbol>
+</svg>
+<div class="sheet">
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="wordmark" href="#top"><svg class="logo" viewBox="0 0 48 32" aria-hidden="true"><use href="#logo"/></svg>DifFRACT</a>
+    <nav class="topnav" aria-label="Sections">
+      <a href="#findings">Findings</a>
+      <a href="#method">Method</a>
+      <a href="#cases">Case studies</a>
+      <a href="#explore">Explore</a>
+      <a href="#evidence">Evidence</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<div class="hero">
+  <div class="wrap">
+    <div class="hero-top">
+      <div>
+        <h1><svg class="logo" viewBox="0 0 48 32" aria-hidden="true"><use href="#logo"/></svg>DifFRACT</h1>
+        <p class="full-title">Diffusion Feature Reconstruction and Attribution for Circuit Tracing</p>
+        <p class="thesis">We trace circuits inside a diffusion transformer: which features of the prompt and of the forming image build a given feature, at a given denoising step.</p>
+      </div>
+      <div>
+        <p class="venue">NeurIPS 2026</p>
+        <ul class="authors">
+          <li>Artyom Mazur<sup>1</sup></li>
+          <li>Nina Konovalova<sup>2,1</sup></li>
+          <li>Aibek Alanov<sup>1,3,4</sup></li>
+        </ul>
+        <p class="affils"><span><sup>1</sup>HSE University</span> <span><sup>2</sup>MBZUAI</span> <span><sup>3</sup>FusionBrain Lab</span> <span><sup>4</sup>AXXX</span></p>
+        <div class="actions">
+          <a class="btn" href="https://arxiv.org/pdf/2606.15796">Paper</a>
+          <a class="btn ghost" href="https://github.com/Artalmaz31/DifFRACT">Code</a>
+          <a class="btn ghost" href="https://huggingface.co/Artalmaz31/DifFRACT" title="The 32 transcoders on Hugging Face">Weights</a>
+          <a class="btn ghost" href="https://colab.research.google.com/github/Artalmaz31/DifFRACT/blob/main/walkthrough.ipynb">Colab</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="hero-band">
+    <div class="wrap">
+      <figure class="wallfig" id="hero-fig"><p class="state">Loading the opening figure…</p></figure>
+    </div>
+  </div>
+</div>
+
+<section id="findings">
+  <div class="wrap">
+    <div class="prose">
+      <h2>What the graphs show</h2>
+      <p class="lede">We replace the MLPs of the first 16 double-stream blocks of FLUX.1 [schnell] with sparse, timestep-conditioned transcoders. With attention frozen, the preactivation of any one feature splits exactly into contributions of earlier features, reconstruction errors and input embeddings, plus a constant, and these contributions form an attribution graph. A graph suggests a mechanism, and an intervention during generation tests it.</p>
+    </div>
+    <ol class="index">
+      <li><a href="#phases"><img src="static/img/steps/t15138-cat-sitting-red-0.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>Two phases of denoising</b><span class="what">The graphs recover the known shift from prompt-driven to image-driven computation: the text stream's share of a graph's attribution falls from <strong>89.9%</strong> at the first step to <strong>5.4%</strong> at the last. FLUX.1 [dev] repeats it, SD3.5-medium goes halfway.</span></span></a></li>
+      <li><a href="#color"><img src="static/img/graphs/red-car.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>How color is assembled</b><span class="what">The red feature draws on the color word, on nearby colors and on red things.</span></span></a></li>
+      <li><a href="#prior"><img src="static/img/gallery/wall/ctx_s1.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>A color prior, and how the graph fixes it</b><span class="what">A white stop sign comes out white on <strong>4 of 30</strong> seeds, and on <strong>27 of 30</strong> once the red feature and three of its graph sources are suppressed.</span></span></a></li>
+      <li><a href="#leakage"><img src="static/img/gallery/more/leak/a100_s42.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>Color leakage</b><span class="what">Amplifying the red features found in the blue feature's graph turns the blue object red in <strong>25%</strong> of generations.</span></span></a></li>
+      <li><a href="#concept"><img src="static/img/gallery/concept/context_s2.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>Concept and context are separate channels</b><span class="what">Suppressing context features strips a bat's identity and keeps its shape in <strong>87.5%</strong> of generations, suppressing concept features in <strong>27.1%</strong>.</span></span></a></li>
+      <li><a href="#suppressor"><img src="static/img/gallery/suppressor/both_s1.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>A feature that suppresses a competing concept</b><span class="what">A dog turns into a cat in <strong>36.1%</strong> of generations when the dog features and a suppressor are suppressed together, at weaker strengths, and in <strong>2.8%</strong> with the dog features alone.</span></span></a></li>
+      <li><a href="#style"><img src="static/img/gallery/more/style/plus_s42.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>Style from primitives</b><span class="what">Watercolor is a composition of perceptual and linguistic components, not one atomic feature.</span></span></a></li>
+      <li><a href="#reflection"><img src="static/img/gallery/more/refl/l11_s7.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>A concept and its derivative</b><span class="what">Suppressing a reflection one layer earlier leaves the water intact in <strong>86.4%</strong> of the affected generations, against <strong>37.5%</strong>.</span></span></a></li>
+      <li><a href="#space"><img src="static/img/gallery/more/lr/pr10_s7.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>Location is steered through the text stream</b><span class="what">Steering the two location supernodes moves the red object to the right half of the image in <strong>85%</strong> of generations.</span></span></a></li>
+      <li><a href="#counting"><img src="static/img/gallery/more/count/seven_s42.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>Numerals order the count but do not set it</b><span class="what">Amplifying <i>three</i>, <i>four</i>, <i>five</i> and <i>seven</i> on prompts that ask for five objects gives <strong>4.33</strong>, <strong>5.49</strong>, <strong>6.44</strong> and <strong>8.05</strong> on average.</span></span></a></li>
+      <li><a href="#failures"><img src="static/img/gallery/more/neg/base_s42.webp" alt="" width="64" height="64" loading="lazy" decoding="async"><span><b>Where the prompt does not reach the image</b><span class="what">On <i>a room without a cat</i>, amplifying the emptiness that the text stream represents removes the cat in only <strong>12.5%</strong> of generations, against <strong>8.75%</strong> without it.</span></span></a></li>
+    </ol>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <div class="prose">
+      <h2>How a graph is built</h2>
+      <p>FLUX.1 [schnell]<sup><a href="#ref-flux">1</a></sup> has 19 double-stream blocks, in which image and text tokens keep separate weights and interact only through joint attention, followed by 38 single-stream blocks. We analyze the double-stream blocks. The construction follows circuit tracing in language models<sup><a href="#ref-ameisen">2</a>, <a href="#ref-dunefsky">3</a></sup>.</p>
+    </div>
+    <div class="steps3">
+      <div>
+        <h3>Replace each MLP with a transcoder</h3>
+        <p>A transcoder predicts the output of an MLP from its input through a wide, sparsely active layer, so the MLP's contribution becomes a sum of features. We train one per block and stream for blocks 0 to 15, each conditioned on the denoising timestep.</p>
+      </div>
+      <div>
+        <h3>Freeze what is not a feature</h3>
+        <p>For one prompt and one step, attention patterns and LayerNorm denominators are frozen at their values on this input, and each MLP is its transcoder plus the cached error. The output of this local replacement model does not change, and the preactivation of a target feature becomes an exact sum of contributions of earlier features, errors and input embeddings, plus a constant.</p>
+      </div>
+      <div>
+        <h3>Expand, sum over positions, prune</h3>
+        <p>One backward pass gives every edge into a feature. Repeating it for the most influential sources grows the graph. Summing each feature over its positions and pruning what carries little influence shrinks it again.</p>
+      </div>
+    </div>
+    <figure class="buildfig" id="fig-build">
+      <div class="bf-body">
+      <div class="bf-main">
+      <div class="bf-stage"></div>
+      <ul class="legend bf-legend">
+        <li><svg viewBox="0 0 34 14" width="34" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#fff" stroke="var(--txt)" stroke-width="1.6"/><circle cx="25" cy="7" r="5" fill="#ebaf77" stroke="var(--txt)" stroke-width="1.6"/></svg>text feature: discovered, expanded</li>
+        <li><svg viewBox="0 0 34 14" width="34" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#fff" stroke="var(--img)" stroke-width="1.6"/><circle cx="25" cy="7" r="5" fill="#8bb0ed" stroke="var(--img)" stroke-width="1.6"/></svg>image feature: discovered, expanded</li>
+        <li><svg viewBox="0 0 16 14" width="16" height="14" preserveAspectRatio="xMinYMid meet" aria-hidden="true"><circle cx="8" cy="7" r="5" fill="#dccfee" stroke="#8b5fc7" stroke-width="1.6" stroke-dasharray="3 2.4"/></svg>truncation error</li>
+        <li><svg viewBox="0 0 26 14" width="26" height="14" preserveAspectRatio="xMinYMid meet" aria-hidden="true"><line x1="2" y1="7" x2="24" y2="7" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="5 4"/></svg>edge below τ, dropped</li>
+      </ul>
+      </div>
+      <div class="bf-side">
+        <ol class="bf-steps">
+          <li><button type="button" data-step="0"><b>Initialization.</b> One backward pass gives every edge into the target, from features of both streams at every position. Edges below the threshold τ are dropped.</button></li>
+          <li><button type="button" data-step="1"><b>Iterative expansion.</b> The most influential sources are expanded in turn, each by a backward pass of its own, up to 1,000 passes per graph.</button></li>
+          <li><button type="button" data-step="2"><b>Compaction.</b> Features that were never expanded fold into truncation-error vertices.</button></li>
+          <li><button type="button" data-step="3"><b>Aggregation.</b> The vertices of one feature at several positions are collapsed into one. The graph is then pruned to the vertices and edges that carry most of the influence on the target.</button></li>
+        </ol>
+        <button class="btn small ghost bf-replay" type="button" hidden>Play the four steps again</button>
+      </div>
+      </div>
+    </figure>
+    <p class="caption"><b>Building a graph</b>, the paper's figure step by step, for an image-stream target <i class="f">cat eyes</i> at layer ℓ. A cluster of small circles is one feature at several positions. Outlined circles are sources whose own incoming edges are not yet computed. An edge takes the color of its source.</p>
+
+    <div class="folds">
+      <details class="more" id="fold-equations" data-fold="equations"><summary><span>In equations<small>the transcoder, the local replacement model, the weight of an edge, what the edges sum to, pruning</small></span></summary><div class="fold"><p class="state">Loading this section…</p></div></details>
+    </div>
+
+    <div class="prose">
+      <h3 style="margin-top:36px">What a graph explains, and how we test it</h3>
+      <p>A graph explains the preactivation of one feature at one layer, stream, position and denoising step, not an image. Attention is frozen, so a graph shows where information flows through attention but not why the model attends there. On image-stream targets the features of a pruned graph carry 46% of the explained quantity and error vertices 30%, while on text-stream targets features carry 84% (<a href="#evidence">Evidence</a>).</p>
+      <p>The case studies therefore treat a graph as a source of hypotheses and test each one by an intervention: the activation of a feature is scaled by α at every position and, unless stated otherwise, every denoising step (0 ≤ α &lt; 1 weakens the feature, α &gt; 1 amplifies it, and α &lt; 0 inverts its contribution, which the case studies call suppression). The MLP that hosts the feature is then computed by its transcoder, everything else runs unchanged, and the effect is judged on the final image. Ten experiments ran on prompt grids and were labeled blind: for each pair of a baseline and an intervened image of the same seed, annotators answered one question with a label set fixed in advance, without seeing the condition.</p>
+      <p class="howto"><b>How to read the figures.</b> In every figure below the graph comes first: groups of its features and, on the arrows, the summed attribution of all edges between two groups. Point at a group to see where it fires and click it for its features. The test is under the graph: point at a row to see on the graph what it does, click it to keep it there.</p>
+    </div>
+  </div>
+</section>
+
+<section id="cases">
+  <div class="wrap">
+    <div class="prose">
+      <h2>Case studies</h2>
+      <p>Eleven case studies, in one form. Each one finds a candidate feature by browsing the dictionary or by contrasting prompts, computes its attribution graph on a representative prompt, groups the sources into supernodes, forms a hypothesis and tests it. The search was exploratory: we inspected roughly 2,000 features and built about 150 graphs, and kept a graph when it suggested a testable hypothesis, not when the intervention later succeeded.</p>
+    </div>
+
+    <article class="case" id="phases">
+      <div class="prose">
+        <h3>Two phases of denoising</h3>
+        <p>A diffusion transformer applies the same network at every denoising step. Does the structure of its circuits change along the way? We traced 20 pairs of a prompt and an image-stream target feature at each of the four steps of FLUX.1 [schnell], 80 graphs, and measured in each the share of absolute attribution carried by edges whose source lies in each stream.</p>
+        <p>On average the text-stream share falls monotonically from 89.9% at step 0 to 5.4% at step 3, and the fraction of edges that cross between the streams from 14.9% to 2.0%. All 20 targets end with a higher image share and a lower cross-stream fraction than they start with.</p>
+      </div>
+      <figure class="fig clip plate"><div class="card">
+        <video data-autoplay src="static/video/phases.mp4" poster="static/video/phases.webp" width="660" height="648" muted loop playsinline preload="none" aria-label="Animation: the features that feed the reflection feature, by stream and layer, at denoising steps 0 to 3."></video>
+        <figcaption><b>One target across the four steps.</b> The image-stream feature <i class="f">reflection</i> of layer 12 on <q class="prompt">a mountain reflected in a still lake</q>. At step 0 most of its sources lie in the text stream, by step 3 in the image stream. <a href="#explore" data-graph="mountain-0">Open these graphs in the explorer.</a></figcaption>
+      </div></figure>
+      <div id="fig-tempo-steps" class="fig"></div>
+      <div class="prose">
+        <p>The shift is not uniform over depth: for the five targets at layer 12, by step 3 most image-stream edges come from layers 0–1 and 4–7, while layers 2–3 stay nearly inactive at every step.</p>
+      </div>
+      <div id="fig-tempo-layers" class="fig"></div>
+      <div class="prose">
+        <p>This matches a two-phase view of denoising that earlier work reached without circuits: text conditioning is relied on early and largely ignored late<sup><a href="#ref-ediff">5</a></sup>, guidance helps only in a middle range of noise levels<sup><a href="#ref-guidance">6</a></sup>, and SAE probes find the composition set in the first steps and the style in the middle ones<sup><a href="#ref-tinaz">7</a></sup>. A low image-stream share at the first step is expected, as generation starts from noise. The graphs recover it from the inside, stream by stream and layer by layer, and it holds causally: suppressing the text-stream supernode for the cat removes the cat in 72.2% of generations at steps 0–1 and in none of 36 at steps 2–3. Graphs at different steps capture different mechanisms, and semantic interventions work when applied early.</p>
+      </div>
+      <div id="fig-tempo-test" class="fig"></div>
+      <div class="prose">
+        <p><b>Three backbones.</b> We repeated the analysis on FLUX.1 [dev] and SD3.5-medium<sup><a href="#ref-sd35">8</a></sup>, with transcoders trained by the same recipe: the same 20 prompts, seeds and target layers, the target feature selected again in each dictionary, and steps matched to the four above by noise level. FLUX.1 [dev] reproduces the shift: its image-stream share rises from 22.1% to 93.9% and its cross-stream fraction falls from 10.7% to 2.2%, and at the two later noise levels the two FLUX models are indistinguishable. Its higher start comes from six targets whose re-selected features are barely active at the first level. Without them it reads 11.8%, against 10.3% for the same fourteen targets on FLUX.1 [schnell].</p>
+        <p>SD3.5-medium moves in the same direction but only halfway, from 8.5% to 63.9% image share and from 21.5% to 12.4% cross-stream edges: its text-driven phase lasts longer. Half of all its attribution at the first level comes straight from the text input vertex, the direct path from the text embeddings (51.3%, against 26.2% and 23.3% on the two FLUX models). It also runs classifier-free guidance, so a graph explains only the conditional half of the batch.</p>
+      </div>
+      <div id="fig-tempo-backbones" class="fig"></div>
+    </article>
+
+    <article class="case" id="color">
+      <div class="prose">
+        <h3>How color is assembled</h3>
+        <p>The <button class="feat" data-key="L10/img/40684">red</button> feature fires on red regions of any object, and its graph is stable across prompts. Most attribution flows from the text stream through three channels: the color word itself, linguistically nearby colors (<i>orange</i>, and <i>purple</i>, which enters with a negative sign), and associations with red things (<i>tomatoes</i>, the <i>Canadian flag</i>). The image-stream side is nearly the same on every prompt. What changes is a feature of a nearby color, <button class="feat" data-key="L9/img/45849">pink</button> on a red dress and <button class="feat" data-key="L9/img/45707">orange</button> on a red sunset, and the text stream, with its many features tied to the object.</p>
+      </div>
+      <div data-exhibit="color" class="fig"></div>
+      <div class="prose">
+        <p>Interventions on <q class="prompt">a red apple on a wooden table</q> show an asymmetry: suppressing the red features shifts the apple to the model's natural green, amplifying blue features alone has no visible effect, and only both together give a blue apple, on 3 of 5 seeds (this example was not evaluated on a larger grid). This suggests that an explicit color word creates an activation that has to be actively suppressed.</p>
+      </div>
+      <div data-rows="apple" class="fig"></div>
+    </article>
+
+    <article class="case" id="prior">
+      <div class="prose">
+        <h3>A color prior, and how the graph fixes it</h3>
+        <p>Color priors from the training data turn atypical colors into the usual one: <q class="prompt">a white stop sign</q>, <q class="prompt">a black ladybug</q> and <q class="prompt">a blue pomegranate</q> come out red. The graph of the image-stream <button class="feat" data-key="L10/img/40684">red</button> feature shows two competing text-stream signals: features on the object's tokens push it up, and features of the requested color push it down. Often the prior wins, and the red feature fires although the prompt asks for another color.</p>
+      </div>
+      <div data-exhibit="prior" class="fig"></div>
+      <div class="prose">
+        <p>If the prior lives in those sources, suppressing the red feature alone should not be enough, because its sources keep pushing it back up. That is what happens. Suppressing it alone gives the requested color on 8 to 12 of 30 seeds, and suppressing it together with three associative sources picked from its graph gives it on 26 to 30, on all three prompts. The graph in the figure, re-traced for the page, holds two of the three.</p>
+        <p><b>A matched budget.</b> A four-feature intervention could win simply by touching more features. So we fix the budget at four features and the target, and vary only how the three companions are chosen from one pool, the text-stream features of layers 0–7. Three rules use activations only, so an SAE could apply them: the top three by activation on the prompt tokens, by contrast against a neutral prompt, and by co-activation with the target over a 48-prompt corpus. The fourth set is the three graph sources above, fixed before this comparison was run.</p>
+      </div>
+      <div id="fig-budget" class="fig"></div>
+      <div class="prose">
+        <p>The graph is not better than co-activation at producing the requested color: 82.1% against 76.7%, a difference that is not statistically significant. Within this dictionary and at this budget, it contributes selectivity: co-activation destroys the object in 21.7% of generations, the graph in 13.8%. Contrast removes the red almost entirely and the object with it. Activation barely touches the object but leaves 35.4% red. The graph set fails worst on <q class="prompt">a blue strawberry on a white plate</q>, where it destroys the object on all 30 seeds: when the color is part of what makes the object recognizable, suppressing its associative channel removes the object too.</p>
+        <p><b>Three backbones.</b> The same grid was run on FLUX.1 [dev] and SD3.5-medium, with the target and the companion sets found again in each dictionary by rules fixed before the generation. Human labels exist only for FLUX.1 [schnell], so here every generation of the three backbones is judged by one vision-language model<sup><a href="#ref-qwen">9</a></sup>, and the comparison is made on the pairs whose baseline it judges red (the second view of the figure). On FLUX.1 [dev] the graph set fixes the prior most often, in 81.9% of them against 62.7% for co-activation, and destroys the object less often, 7.2% against 31.3%. On SD3.5-medium the graph set again leads co-activation (65.7% against 41.4% with the requested color, 33.3% against 57.6% destroyed), but it loses a third of the objects. On FLUX.1 [schnell] the model agrees with the annotator that the two sets do not differ in success (79.3% against 72.1%), and its destruction difference, 13.5% against 18.0%, points the same way without being significant.</p>
+      </div>
+    </article>
+
+    <article class="case" id="leakage">
+      <div class="prose">
+        <h3>Color leakage</h3>
+        <p>Color leakage, the failure to bind colors to the right objects on prompts with several colored objects, is a standard pathology of text-to-image models. If the color circuit above is right, leakage should show up as spurious attributions of the wrong color in a target's graph. On <q class="prompt">a red apple and a blue cup</q> the graph of the <button class="feat" data-key="L10/img/48885">blue</button> feature does contain, besides the expected blue sources, a small number of red text features, with attributions one to two orders of magnitude weaker than the dominant ones. If this spurious attribution is causal, amplifying these red features should turn the cup red.</p>
+      </div>
+      <div data-exhibit="leakage" class="fig"></div>
+      <div class="prose">
+        <p>It does, on some seeds. On 16 prompts with a red and a blue object × 5 seeds, the blue object turns red in 25% of generations at α = +30, while the more common outcome is that the surroundings turn red instead (62.5%). The causal direction is clear but the effect is seed-dependent, which fits the nature of attribution graphs: the cause of leakage is localizable to specific features, and those features enter the graph only on some seeds. Where they do not, the steering hits the wrong locations.</p>
+      </div>
+    </article>
+
+    <article class="case" id="concept">
+      <div class="prose">
+        <h3>Concept and context are separate channels</h3>
+        <p>Single-feature steering picks features by their activation on a concept. A graph shows two kinds of features around it. <em>Concept</em> features fire on the tokens of the concept itself. <em>Context</em> features fire on related but different words. The five used here are influential sources in the concept feature's graph that are not concept features.</p>
+        <p>For <q class="prompt">a baseball bat on a table</q> the concept set is <button class="feat" data-key="L11/txt/12936">baseball bat</button> at layer 11 with four features of layers 7–9 that fire on the same tokens. The context set is five text features of layers 5–9 that fire on <i>baseball</i>, <i>batter</i>, <i>hand</i> and <i>glove</i>. Both sets are read off this one graph and applied unchanged to every prompt of the test.</p>
+      </div>
+      <div data-exhibit="concept" data-scenes="0" class="fig"></div>
+      <div class="prose">
+        <p>Suppressing each set has a distinct effect. Without the concept features the bat is replaced by a nearby object, often a ball. Without the context features it keeps its shape but loses its identity and becomes a featureless wooden stick. Without both, nothing reminiscent of a bat or of baseball is left. On 16 prompts × 3 seeds at α = −15, context steering keeps the shape and strips the identity in 87.5% of generations against 27.1% for concept steering. Concept steering replaces or removes the object in 45.8% against 6.3%, and both together leave a recognizable bat in 2.1%. Ranking features by activation on the concept's tokens, as single-feature steering does, finds the concept set. The context set comes from the graph.</p>
+        <p><b>Two senses of one word.</b> The same context features can be used the other way. The token <i>bat</i> is polysemous: on the bare prompt <q class="prompt">a bat</q> the graph holds animal, baseball and party senses at once, while the model draws a flying bat on every seed. The baseball features in that graph have positive attribution, so amplifying the baseball context features should steer toward the weaker sense without suppressing the dominant one. It does: the image shows the baseball reading in 33% of generations at α = +30 and in 70% at α = +100.</p>
+      </div>
+      <div data-exhibit="concept" data-scenes="1" class="fig"></div>
+    </article>
+
+    <article class="case" id="suppressor">
+      <div class="prose">
+        <h3>A feature that suppresses a competing concept</h3>
+        <p>Graphs keep negative edges. In the graph of the image-stream <button class="feat" data-key="L12/img/15138">cat</button> feature at layer 12 there is a text feature at layer 7, <button class="feat" data-key="L7/txt/17694">dog-suppressor</button>, whose strongest corpus activations are on dog breeds (<i>wiener dog</i>, <i>dachshund</i>) and which has many outgoing negative edges. Nearly all of their weight lands on features that excite the cat feature. On a dog prompt the suppressor is about twice as active as on a cat prompt, and the weight of its negative edges doubles. The hypothesis: on dog prompts it holds cat features down, keeping cat semantics out of the image.</p>
+      </div>
+      <div data-exhibit="suppressor" class="fig"></div>
+      <div class="prose">
+        <p>Four interventions on 12 scenes, each prompted once with a dog and once with a cat, test it. Suppressing the cat features at α = −60 on a cat prompt removes the cat in 88.9% of generations, confirming the graph. Inverting the suppressor alone at α = −60 on a dog prompt never produces a cat (0 of 36), a null the graph predicts, since dog semantics is carried by other features. Suppressing the dog features alone removes the dog in 29 of 36 generations but produces a cat in only one: switching concepts takes more than removing one pole. Suppressing the dog features at α = −20 together with the suppressor at α = −30 turns the dog into a cat in 36.1% of generations, at a weaker suppression of the dog features.</p>
+        <p>Graphs thus capture active suppression, distinct from absence of activation, and switching a concept takes acting on both what is present and what holds the alternative down. The joint condition differs from the single-channel one in both the suppressor and the strength, so it is evidence that the suppressor channel contributes rather than a fully isolated single-variable comparison.</p>
+      </div>
+    </article>
+
+    <article class="case" id="style">
+      <div class="prose">
+        <h3>Style from primitives</h3>
+        <p>With contrastive prompts we find a <button class="feat" data-key="L11/img/34350">watercolor</button> feature at layer 11 of the image stream. Among its strongest sources there is nothing about the depicted object: the feature is content-invariant. Its graph decomposes into stylistic components across the two streams: image features for clouds and steam and for bright multicolored imagery, and text features for light haze and smoke, for painting and for pastel colors. Together they cover what descriptions of watercolor usually name: a pastel palette, soft hazy edges, varied color.</p>
+      </div>
+      <div data-exhibit="style" class="fig"></div>
+      <div class="prose">
+        <p>Steering five components together weakens the style into a more realistic portrait or strengthens it into looser washes and color spills, with the subject unchanged. The model represents the style as a composition of perceptual and linguistic primitives, not as one atomic feature. Style has no binary success criterion, so this case was not part of the blind evaluation and is an illustration, not a measured effect.</p>
+      </div>
+    </article>
+
+    <article class="case" id="reflection">
+      <div class="prose">
+        <h3>A concept and its derivative</h3>
+        <p><button class="feat" data-key="L12/img/1023" data-step="1">reflection</button> at layer 12 fires on reflections of objects in water, mirrors and glass, not on the objects themselves. Its graphs on two prompts at step 1, a castle and a mountain reflected in water, contain the same source, a layer-11 feature with a matching activation map, with an attribution about an order of magnitude larger than that of any other feature. The hypothesis: the layer-11 feature represents reflection closer to its origin, and the layer-12 feature is a downstream derivative, entangled with the surrounding surface.</p>
+      </div>
+      <div data-exhibit="reflection" class="fig"></div>
+      <div class="prose">
+        <p>The interventions are consistent with this. Suppressing the layer-12 feature removes the reflection but deforms the water. Suppressing the layer-11 feature leaves the surface intact while the reflection turns into a blurred patch. On 17 prompts × 5 seeds, among generations whose reflection is removed or weakened, the surface stays intact in 38 of 44 (86.4%) for layer 11 against 18 of 48 (37.5%) for layer 12. Suppressing two layer-11 features that the graph ranks far below the dominant source leaves all 85 generations unchanged. Circuit tracing selected a steering target that satisfies a stricter locality criterion than candidates found by feature interpretation alone.</p>
+      </div>
+    </article>
+
+    <article class="case" id="space">
+      <div class="prose">
+        <h3>Location is steered through the text stream</h3>
+        <p>Around layer 7 of the text stream there are location features, <button class="feat" data-key="L7/txt/5026">left</button> and <button class="feat" data-key="L7/txt/7801">right</button>, that fire on their words whichever object the location is bound to. On the traced prompts they fire on the whole phrase of the red object and its location. Swap the two objects in the prompt, and the location that enters the graph of the red feature follows the red object. We did not find clearly interpretable spatial features in the image stream.</p>
+      </div>
+      <div data-exhibit="space" class="fig"></div>
+      <div class="prose">
+        <p>On 16 prompts × 5 seeds, pushing <i>right</i> up and <i>left</i> down at α = 10 puts the red object in the right half of the image in 85% of generations. Suppressing <i>left</i> alone does so in 39% at the same strength and needs α = 30 to reach 78%. The opposite pair leaves the composition unchanged in 97.5%, as the graph predicts, since the object is already on the left. A sweep of the pair bounds the usable range: at α = 3 the composition is unchanged in 98.8%, at α = 30 the image degrades beyond recognition in 59 of 80 generations and at α = 100 in 74 of 80.</p>
+      </div>
+      <div class="folds">
+        <details class="more" id="fold-space-maps" data-fold="space-maps"><summary><span>Why the location follows the red object<small>the activation maps of the location features over the prompt tokens</small></span></summary><div class="fold"><p class="state">Loading this section…</p></div></details>
+      </div>
+    </article>
+
+    <article class="case" id="counting">
+      <div class="prose">
+        <h3>Numerals order the count but do not set it</h3>
+        <p>An image-stream feature at layer 14, <button class="feat" data-key="L14/img/14079">multiplicity</button>, grows with the number of objects: it is about as active on five apples as on three, and several times more active than on one. The image side is much the same across the three graphs, nearly identical for three and five apples, and the larger difference is in the text stream. On one apple, features for <i>single</i> and <i>one</i> are active. On three apples it is mostly <i>three</i>, and on five apples a diffuse mixture of neighboring numerals from <i>two</i> to <i>eight</i>. The text-stream representation of five is not sharp, a candidate source of counting errors.</p>
+      </div>
+      <div data-exhibit="counting" class="fig"></div>
+      <div class="prose">
+        <p>Amplifying a numeral's supernode at α = +30 on prompts that ask for five objects changes the count monotonically in the numeral, but the mean never lands on the numeral itself: <i>three</i> gives 4.33 objects, <i>four</i> 5.49, <i>five</i> 6.44 and <i>seven</i> 8.05, against 5.31 without intervention. The model carries a robust ordering of numerals but no sharp representation of their values.</p>
+      </div>
+    </article>
+
+    <article class="case" id="failures">
+      <div class="prose">
+        <h3>Where the prompt does not reach the image</h3>
+        <p>Two systematic failures that the graphs diagnose as failures of transfer between the streams: the text stream carries what the prompt requires, and that does not drive the image stream.</p>
+        <p><b>Negation.</b> On <q class="prompt">a room without a cat</q> a text feature <button class="feat" data-key="L10/txt/48010">empty</button> fires on <i>without</i>, and its graph holds other emptiness features: the text stream represents the empty room correctly. Amplifying all of them removes the cat in 12.5% of generations, against 8.75% without the intervention and 1.25% on the matching affirmative prompts. The cat is absent from all 80 generations only when the cat's own text supernode is suppressed.</p>
+      </div>
+      <div data-exhibit="negation" class="fig"></div>
+      <div class="prose">
+        <p><b>A hard prior.</b> The model draws round wheels on <q class="prompt">a bicycle with square wheels</q>. A text feature <button class="feat" data-key="L10/txt/42230">round</button> is active on <i>round wheels</i>, and on <i>square wheels</i> the magnitude of its preactivation drops below one, yet the wheels stay round. Suppressing the roundness features has no effect. Of four interventions, only amplifying angularity features of the image stream comes close, drawing square outlines around wheels that stay round.</p>
+      </div>
+      <div data-exhibit="wheels" class="fig"></div>
+      <div class="prose">
+        <p>In both, the text stream represents what the prompt asks for, and that representation does not carry over into the image stream, and replacing it on the image side works only in part. This is consistent with the shift above: the influence of the text stream decays toward the later steps, and for a strong image-side prior the shrinking text channel may be too weak to overwrite it.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section id="explore" class="band">
+  <div class="wrap">
+    <div class="prose">
+      <h2>Explore the graphs and the dictionary</h2>
+      <p>Every graph above, and the 80 graphs of the temporal analysis, opens in the explorer. A feature of the text stream sits over the token it fires on most, a feature of the image stream where it fires in the image, from left to right. Hover one to light it up on the image and the prompt, click it for its corpus examples, its inputs and its outputs.</p>
+    </div>
+    <div id="launch" class="launch"></div>
+
+    <div class="prose" style="margin-top:56px">
+      <h3>A map of the dictionary</h3>
+      <p>To interpret a feature we look at the corpus prompts on which it fires most and at where it fires in them. The level of abstraction grows with depth in both streams. Text features at layer 6 are tied to surface lexical content (<i>crochet teddy bear</i>, <i>taking a photograph</i>, <i>stacked on each other</i>). At layer 12 they assemble names and quantities, and some fire only on the end-of-sequence token. Image features at layer 6 encode graphical primitives: vertical edges, thin wires, lattices, red regions. At layer 12 they name objects and their parts and, most strikingly, the physics of the scene: reflections, light–shadow boundaries, cast shadows.</p>
+      <p>The two streams have inverse profiles. The share of text features tied to lexical content falls with depth, while image features stay interpretable through layer 18, late in the double-stream blocks. Read together, the two suggest a one-directional transfer of content from text to image. Features also specialize by denoising step: at layer 6 color features peak at steps 0–1 and geometry features at steps 2–3, consistent with the coarse-to-fine progression of diffusion sampling.</p>
+    </div>
+    <div class="folds">
+      <details class="more" id="fold-dictionary-method" data-fold="dictionary-method"><summary><span>How the features were chosen<small>the selection score of the paper, and where each feature fires</small></span></summary><div class="fold"><p class="state">Loading this section…</p></div></details>
+    </div>
+    <div id="atlas"></div>
+  </div>
+</section>
+
+<section id="evidence">
+  <div class="wrap">
+    <div class="prose">
+      <h2>How far to trust a graph</h2>
+      <p class="lede">A graph is computed on a replacement of the model and pruned. The paper checks how much of the original computation it keeps, and tests the case studies blind.</p>
+    </div>
+
+    <div class="ev" id="ev-sae">
+      <h3>Transcoders match sparse autoencoders</h3>
+      <p>Feature-to-feature attribution through MLPs should not cost sparsity or faithfulness. At an early, a middle and a late block we trained, per stream, three transcoders and three SAEs with identical architecture, timestep conditioning and training. The only difference is the objective: an SAE reconstructs the MLP output from that output, a transcoder predicts it from the MLP input. In all six configurations transcoders reach a comparable or modestly better tradeoff at matched sparsity. The timestep conditioning<sup><a href="#ref-tide">10</a></sup> matters for the text stream: without it those transcoders reach twice the error at layer 6 and need 3.5 to 5.3 times as many active features at layer 12.</p>
+      <figure class="plate"><div class="card">
+        <div class="saegrid">
+          <span></span><span class="sg-col">layer 6</span><span class="sg-col">layer 12</span><span class="sg-col">layer 18</span>
+          <span class="sg-row img">image stream</span>
+          <div class="sg-cell"><img src="static/img/figs/tc_vs_sae_0.webp" alt="Layer 6, image stream: nMSE against L0 for transcoders and SAEs" loading="lazy" width="880" height="660"><span class="sg-lab">layer 6, image stream</span></div>
+          <div class="sg-cell"><img src="static/img/figs/tc_vs_sae_1.webp" alt="Layer 12, image stream" loading="lazy" width="880" height="660"><span class="sg-lab">layer 12, image stream</span></div>
+          <div class="sg-cell"><img src="static/img/figs/tc_vs_sae_2.webp" alt="Layer 18, image stream" loading="lazy" width="880" height="660"><span class="sg-lab">layer 18, image stream</span></div>
+          <span class="sg-row txt">text stream</span>
+          <div class="sg-cell"><img src="static/img/figs/tc_vs_sae_3.webp" alt="Layer 6, text stream" loading="lazy" width="880" height="660"><span class="sg-lab">layer 6, text stream</span></div>
+          <div class="sg-cell"><img src="static/img/figs/tc_vs_sae_4.webp" alt="Layer 12, text stream" loading="lazy" width="880" height="660"><span class="sg-lab">layer 12, text stream</span></div>
+          <div class="sg-cell"><img src="static/img/figs/tc_vs_sae_5.webp" alt="Layer 18, text stream" loading="lazy" width="880" height="660"><span class="sg-lab">layer 18, text stream</span></div>
+        </div>
+        <figcaption class="note"><b>Sparsity–faithfulness frontiers</b> of transcoders (squares) and SAEs (circles) on FLUX.1 [schnell], the paper's figure. Each curve is three models at increasing sparsity penalty. Lower left is better.</figcaption>
+      </div></figure>
+    </div>
+
+    <div class="ev" id="ev-replace">
+      <h3>The replacement model is not the model</h3>
+      <p>Swap all 32 MLPs for their transcoders, with no error terms, and generate an image from scratch: the composition, the placement of objects and the style survive, fine detail does not. Graphs are never computed on this model. The local replacement model keeps each MLP's reconstruction error and freezes attention on the traced prompt, so what the transcoders miss does not disappear: it is carried by the error vertices of every graph.</p>
+      <div class="plate">
+        <div class="card">
+          <p class="pairs-lab">Original FLUX.1 [schnell]</p>
+          <div class="pairs" id="pairs-orig"></div>
+          <p class="pairs-lab">All 32 MLPs replaced by transcoders, no error terms</p>
+          <div class="pairs" id="pairs-tc"></div>
+          <p class="note">Ten prompts of the paper's comparison at 512 × 512 and four denoising steps.</p>
+        </div>
+        <div class="card">
+          <p class="kicker">How close the final latent stays to the original's <span>mean cosine similarity</span></p>
+          <div class="meters">
+            <span class="m-lab">All 32 MLPs replaced, no error terms<small>generated from scratch, over 512 prompts</small></span><span class="m-bar dim" style="--v:0.78"><i></i></span><span class="m-val">0.78</span>
+            <span class="m-lab">Local replacement model at step 0<small>substituted at one denoising step</small></span><span class="m-bar" style="--v:0.9854"><i></i></span><span class="m-val">0.9854</span>
+            <span class="m-lab">Local replacement model at step 3<small>substituted at one denoising step</small></span><span class="m-bar" style="--v:1"><i></i></span><span class="m-val">1.0000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ev" id="ev-graphs">
+      <h3>Do the graphs describe the original model?</h3>
+      <p>We check 86 graphs, the targets of the case studies (51 image-stream, 35 text-stream), so they are not an independent sample. A pruned graph should still account for most of what it explains, and its edges should predict what happens in the original model when a source is removed.</p>
+      <div class="plate">
+        <div class="card">
+          <p class="kicker">What a pruned graph accounts for <span>shares of the explained quantity, percent, mean over targets</span></p>
+          <div class="shares">
+            <span class="s-lab">Image targets<small>51 graphs</small></span><div class="sharestack" role="img" aria-label="Image targets: feature vertices 46.1, error vertices 30.1, input vertices 11.9, threshold residual 7.5, pruning loss 4.4"><span class="s-feat" style="--v:46.1" title="feature vertices: 46.1">46.1</span><span class="s-err" style="--v:30.1" title="error vertices: 30.1">30.1</span><span class="s-in" style="--v:11.9" title="input vertices: 11.9">11.9</span><span class="s-thr" style="--v:7.5" title="threshold residual: 7.5">7.5</span><span class="s-prn" style="--v:4.4" title="pruning loss: 4.4">4.4</span></div>
+            <span class="s-lab">Text targets<small>35 graphs</small></span><div class="sharestack" role="img" aria-label="Text targets: feature vertices 84.1, error vertices 3.5, input vertices 5.9, threshold residual 0.7, pruning loss 5.8"><span class="s-feat" style="--v:84.1" title="feature vertices: 84.1">84.1</span><span class="s-err" style="--v:3.5" title="error vertices: 3.5">3.5</span><span class="s-in" style="--v:5.9" title="input vertices: 5.9">5.9</span><span class="s-thr" style="--v:0.7" title="threshold residual: 0.7"></span><span class="s-prn" style="--v:5.8" title="pruning loss: 5.8">5.8</span></div>
+            <span class="s-lab">All<small>86 graphs</small></span><div class="sharestack" role="img" aria-label="All targets: feature vertices 61.6, error vertices 19.3, input vertices 9.5, threshold residual 4.7, pruning loss 5.0"><span class="s-feat" style="--v:61.6" title="feature vertices: 61.6">61.6</span><span class="s-err" style="--v:19.3" title="error vertices: 19.3">19.3</span><span class="s-in" style="--v:9.5" title="input vertices: 9.5">9.5</span><span class="s-thr" style="--v:4.7" title="threshold residual: 4.7">4.7</span><span class="s-prn" style="--v:5.0" title="pruning loss: 5.0">5.0</span></div>
+          </div>
+          <ul class="legend">
+            <li><span class="sw s-feat"></span>feature vertices</li>
+            <li><span class="sw s-err"></span>error vertices</li>
+            <li><span class="sw s-in"></span>input vertices</li>
+            <li><span class="sw s-thr"></span>lost to the extraction thresholds</li>
+            <li><span class="sw s-prn"></span>lost to pruning</li>
+          </ul>
+        </div>
+        <div class="card">
+          <p class="kicker">Remove one feature from the original model: do the others change as the graph predicts? <span>Spearman rank correlation of the predicted and the measured changes, mean over graphs</span></p>
+          <div class="meters agree">
+            <span class="m-lab">Image targets<small>51 graphs</small></span><span class="m-bar" style="--v:0.676"><i></i></span><span class="m-val">0.68</span>
+            <span class="m-lab">Text targets<small>35 graphs</small></span><span class="m-bar" style="--v:0.545"><i></i></span><span class="m-val">0.55</span>
+            <span class="m-lab">Cross-layer transcoders on a language model<small>for comparison, in a related test<sup><a href="#ref-ameisen">2</a></sup></small></span><span class="m-bar dim" style="--v:0.72"><i></i></span><span class="m-val">0.72</span>
+          </div>
+          <p class="note">In each graph its 30 most influential features are removed one at a time, in the original model and not in the replacement, and the change in each of the other 29 is compared with the influence the graph predicts.</p>
+        </div>
+      </div>
+      <div class="folds">
+        <details class="more" id="fold-graph-validation" data-fold="graph-validation"><summary><span>The two checks in full<small>the residuals before and after pruning, which vertices are ablated, the correlations and the shares as tables</small></span></summary><div class="fold"><p class="state">Loading this section…</p></div></details>
+      </div>
+    </div>
+
+    <div class="ev" id="ev-backbones">
+      <h3>The same checks on three backbones</h3>
+      <p>For FLUX.1 [dev] and SD3.5-medium we trained 32 transcoders each with the recipe of FLUX.1 [schnell] and kept its tracing and pruning parameters. The transcoders reproduce the original model end to end at least as well as on FLUX.1 [schnell], and the local replacement model is nearly as exact. Under ablation in the original model their graphs, those of the temporal analysis, correlate somewhat less well than the case-study graphs of FLUX.1 [schnell].</p>
+      <div class="plate bcards">
+        <div class="card">
+          <h4>FLUX.1 [schnell]</h4>
+          <div class="spec">
+            <svg class="arch" viewBox="0 0 232 21" aria-hidden="true"><rect class="i" x="0" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="0" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="4" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="4" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="8" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="8" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="12" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="12" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="16" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="16" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="20" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="20" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="24" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="24" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="28" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="28" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="32" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="32" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="36" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="36" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="40" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="40" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="44" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="44" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="48" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="48" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="52" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="52" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="56" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="56" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="60" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="60" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="64" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="64" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="68" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="68" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="72" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="72" y="11" width="3" height="10" rx="0.6"/><rect class="s" x="80" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="84" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="88" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="92" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="96" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="100" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="104" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="108" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="112" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="116" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="120" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="124" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="128" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="132" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="136" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="140" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="144" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="148" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="152" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="156" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="160" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="164" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="168" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="172" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="176" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="180" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="184" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="188" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="192" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="196" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="200" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="204" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="208" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="212" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="216" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="220" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="224" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="228" y="0" width="3" height="21" rx="0.6"/></svg>
+            <p>19 double-stream and 38 single-stream blocks. Transcoders on blocks 0–15, both streams, 49,152 features each.</p>
+            <svg class="steps" viewBox="0 0 232 10" aria-hidden="true"><rect x="0.00" y="0" width="55.75" height="10" rx="2"/><rect x="58.75" y="0" width="55.75" height="10" rx="2"/><rect x="117.50" y="0" width="55.75" height="10" rx="2"/><rect x="176.25" y="0" width="55.75" height="10" rx="2"/></svg>
+            <p>4 denoising steps, no guidance.</p>
+          </div>
+          <div class="meters">
+            <span class="m-lab">All MLPs replaced, latent cosine similarity</span><span class="m-bar dim" style="--v:0.7839"><i></i></span><span class="m-val">0.7839</span>
+            <span class="m-lab">Local replacement model at σ = 1</span><span class="m-bar" style="--v:0.9854"><i></i></span><span class="m-val">0.9854</span>
+            <span class="m-lab">Local replacement model at σ ≈ 0.25</span><span class="m-bar" style="--v:1"><i></i></span><span class="m-val">1.0000</span>
+            <span class="m-lab">Graph against ablation, median rank correlation</span><span class="m-bar" style="--v:0.69"><i></i></span><span class="m-val">0.69</span>
+          </div>
+        </div>
+        <div class="card">
+          <h4>FLUX.1 [dev]</h4>
+          <div class="spec">
+            <svg class="arch" viewBox="0 0 232 21" aria-hidden="true"><rect class="i" x="0" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="0" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="4" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="4" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="8" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="8" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="12" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="12" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="16" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="16" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="20" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="20" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="24" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="24" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="28" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="28" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="32" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="32" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="36" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="36" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="40" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="40" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="44" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="44" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="48" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="48" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="52" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="52" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="56" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="56" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="60" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="60" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="64" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="64" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="68" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="68" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="72" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="72" y="11" width="3" height="10" rx="0.6"/><rect class="s" x="80" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="84" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="88" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="92" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="96" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="100" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="104" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="108" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="112" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="116" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="120" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="124" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="128" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="132" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="136" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="140" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="144" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="148" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="152" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="156" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="160" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="164" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="168" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="172" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="176" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="180" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="184" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="188" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="192" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="196" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="200" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="204" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="208" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="212" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="216" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="220" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="224" y="0" width="3" height="21" rx="0.6"/><rect class="s" x="228" y="0" width="3" height="21" rx="0.6"/></svg>
+            <p>19 double-stream and 38 single-stream blocks. Transcoders on blocks 0–15, both streams, 49,152 features each.</p>
+            <svg class="steps" viewBox="0 0 232 10" aria-hidden="true"><rect x="0.00" y="0" width="3.17" height="10" rx="1"/><rect x="4.67" y="0" width="3.17" height="10" rx="1"/><rect x="9.34" y="0" width="3.17" height="10" rx="1"/><rect x="14.01" y="0" width="3.17" height="10" rx="1"/><rect x="18.68" y="0" width="3.17" height="10" rx="1"/><rect x="23.35" y="0" width="3.17" height="10" rx="1"/><rect x="28.02" y="0" width="3.17" height="10" rx="1"/><rect x="32.69" y="0" width="3.17" height="10" rx="1"/><rect x="37.36" y="0" width="3.17" height="10" rx="1"/><rect x="42.03" y="0" width="3.17" height="10" rx="1"/><rect x="46.70" y="0" width="3.17" height="10" rx="1"/><rect x="51.37" y="0" width="3.17" height="10" rx="1"/><rect x="56.04" y="0" width="3.17" height="10" rx="1"/><rect x="60.71" y="0" width="3.17" height="10" rx="1"/><rect x="65.38" y="0" width="3.17" height="10" rx="1"/><rect x="70.05" y="0" width="3.17" height="10" rx="1"/><rect x="74.72" y="0" width="3.17" height="10" rx="1"/><rect x="79.39" y="0" width="3.17" height="10" rx="1"/><rect x="84.06" y="0" width="3.17" height="10" rx="1"/><rect x="88.73" y="0" width="3.17" height="10" rx="1"/><rect x="93.40" y="0" width="3.17" height="10" rx="1"/><rect x="98.07" y="0" width="3.17" height="10" rx="1"/><rect x="102.74" y="0" width="3.17" height="10" rx="1"/><rect x="107.41" y="0" width="3.17" height="10" rx="1"/><rect x="112.08" y="0" width="3.17" height="10" rx="1"/><rect x="116.75" y="0" width="3.17" height="10" rx="1"/><rect x="121.42" y="0" width="3.17" height="10" rx="1"/><rect x="126.09" y="0" width="3.17" height="10" rx="1"/><rect x="130.76" y="0" width="3.17" height="10" rx="1"/><rect x="135.43" y="0" width="3.17" height="10" rx="1"/><rect x="140.10" y="0" width="3.17" height="10" rx="1"/><rect x="144.77" y="0" width="3.17" height="10" rx="1"/><rect x="149.44" y="0" width="3.17" height="10" rx="1"/><rect x="154.11" y="0" width="3.17" height="10" rx="1"/><rect x="158.78" y="0" width="3.17" height="10" rx="1"/><rect x="163.45" y="0" width="3.17" height="10" rx="1"/><rect x="168.12" y="0" width="3.17" height="10" rx="1"/><rect x="172.79" y="0" width="3.17" height="10" rx="1"/><rect x="177.46" y="0" width="3.17" height="10" rx="1"/><rect x="182.13" y="0" width="3.17" height="10" rx="1"/><rect x="186.80" y="0" width="3.17" height="10" rx="1"/><rect x="191.47" y="0" width="3.17" height="10" rx="1"/><rect x="196.14" y="0" width="3.17" height="10" rx="1"/><rect x="200.81" y="0" width="3.17" height="10" rx="1"/><rect x="205.48" y="0" width="3.17" height="10" rx="1"/><rect x="210.15" y="0" width="3.17" height="10" rx="1"/><rect x="214.82" y="0" width="3.17" height="10" rx="1"/><rect x="219.49" y="0" width="3.17" height="10" rx="1"/><rect x="224.16" y="0" width="3.17" height="10" rx="1"/><rect x="228.83" y="0" width="3.17" height="10" rx="1"/></svg>
+            <p>50 denoising steps, embedded guidance at scale 3.5.</p>
+          </div>
+          <div class="meters">
+            <span class="m-lab">All MLPs replaced, latent cosine similarity</span><span class="m-bar dim" style="--v:0.8378"><i></i></span><span class="m-val">0.8378</span>
+            <span class="m-lab">Local replacement model at σ = 1</span><span class="m-bar" style="--v:0.9943"><i></i></span><span class="m-val">0.9943</span>
+            <span class="m-lab">Local replacement model at σ ≈ 0.25</span><span class="m-bar" style="--v:1"><i></i></span><span class="m-val">1.0000</span>
+            <span class="m-lab">Graph against ablation, median rank correlation</span><span class="m-bar" style="--v:0.64"><i></i></span><span class="m-val">0.64</span>
+          </div>
+        </div>
+        <div class="card">
+          <h4>SD3.5-medium</h4>
+          <div class="spec">
+            <svg class="arch" viewBox="0 0 232 21" aria-hidden="true"><rect class="i" x="0" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="0" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="4" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="4" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="8" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="8" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="12" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="12" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="16" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="16" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="20" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="20" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="24" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="24" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="28" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="28" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="32" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="32" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="36" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="36" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="40" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="40" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="44" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="44" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="48" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="48" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="52" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="52" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="56" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="56" y="11" width="3" height="10" rx="0.6"/><rect class="i" x="60" y="0" width="3" height="10" rx="0.6"/><rect class="t" x="60" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="64" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="64" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="68" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="68" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="72" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="72" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="76" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="76" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="80" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="80" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="84" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="84" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="88" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="88" y="11" width="3" height="10" rx="0.6"/><rect class="o" x="92" y="0" width="3" height="10" rx="0.6"/><rect class="o" x="92" y="11" width="3" height="10" rx="0.6"/></svg>
+            <p>24 joint blocks, an image-only second attention in blocks 0–12. Transcoders on blocks 0–15, both streams, 24,576 features each.</p>
+            <svg class="steps" viewBox="0 0 232 10" aria-hidden="true"><rect x="0.00" y="0" width="4.34" height="10" rx="1"/><rect x="5.84" y="0" width="4.34" height="10" rx="1"/><rect x="11.68" y="0" width="4.34" height="10" rx="1"/><rect x="17.51" y="0" width="4.34" height="10" rx="1"/><rect x="23.35" y="0" width="4.34" height="10" rx="1"/><rect x="29.19" y="0" width="4.34" height="10" rx="1"/><rect x="35.03" y="0" width="4.34" height="10" rx="1"/><rect x="40.86" y="0" width="4.34" height="10" rx="1"/><rect x="46.70" y="0" width="4.34" height="10" rx="1"/><rect x="52.54" y="0" width="4.34" height="10" rx="1"/><rect x="58.38" y="0" width="4.34" height="10" rx="1"/><rect x="64.21" y="0" width="4.34" height="10" rx="1"/><rect x="70.05" y="0" width="4.34" height="10" rx="1"/><rect x="75.89" y="0" width="4.34" height="10" rx="1"/><rect x="81.73" y="0" width="4.34" height="10" rx="1"/><rect x="87.56" y="0" width="4.34" height="10" rx="1"/><rect x="93.40" y="0" width="4.34" height="10" rx="1"/><rect x="99.24" y="0" width="4.34" height="10" rx="1"/><rect x="105.08" y="0" width="4.34" height="10" rx="1"/><rect x="110.91" y="0" width="4.34" height="10" rx="1"/><rect x="116.75" y="0" width="4.34" height="10" rx="1"/><rect x="122.59" y="0" width="4.34" height="10" rx="1"/><rect x="128.43" y="0" width="4.34" height="10" rx="1"/><rect x="134.26" y="0" width="4.34" height="10" rx="1"/><rect x="140.10" y="0" width="4.34" height="10" rx="1"/><rect x="145.94" y="0" width="4.34" height="10" rx="1"/><rect x="151.78" y="0" width="4.34" height="10" rx="1"/><rect x="157.61" y="0" width="4.34" height="10" rx="1"/><rect x="163.45" y="0" width="4.34" height="10" rx="1"/><rect x="169.29" y="0" width="4.34" height="10" rx="1"/><rect x="175.12" y="0" width="4.34" height="10" rx="1"/><rect x="180.96" y="0" width="4.34" height="10" rx="1"/><rect x="186.80" y="0" width="4.34" height="10" rx="1"/><rect x="192.64" y="0" width="4.34" height="10" rx="1"/><rect x="198.48" y="0" width="4.34" height="10" rx="1"/><rect x="204.31" y="0" width="4.34" height="10" rx="1"/><rect x="210.15" y="0" width="4.34" height="10" rx="1"/><rect x="215.99" y="0" width="4.34" height="10" rx="1"/><rect x="221.83" y="0" width="4.34" height="10" rx="1"/><rect x="227.66" y="0" width="4.34" height="10" rx="1"/></svg>
+            <p>40 denoising steps, classifier-free guidance at scale 4.5.</p>
+          </div>
+          <div class="meters">
+            <span class="m-lab">All MLPs replaced, latent cosine similarity</span><span class="m-bar dim" style="--v:0.9217"><i></i></span><span class="m-val">0.9217</span>
+            <span class="m-lab">Local replacement model at σ = 1</span><span class="m-bar" style="--v:0.9602"><i></i></span><span class="m-val">0.9602</span>
+            <span class="m-lab">Local replacement model at σ ≈ 0.25</span><span class="m-bar" style="--v:0.9999"><i></i></span><span class="m-val">0.9999</span>
+            <span class="m-lab">Graph against ablation, median rank correlation</span><span class="m-bar" style="--v:0.57"><i></i></span><span class="m-val">0.57</span>
+          </div>
+        </div>
+        <p class="note">A column is a block, colored where it has transcoders. The bar under it is the denoising, one segment per step.</p>
+      </div>
+    </div>
+
+    <div class="ev" id="ev-blind">
+      <h3>The blind evaluation</h3>
+      <p>Ten of the intervention experiments ran on prompt grids and were labeled blind, 4,099 items in all. Each item is one pair of a baseline and an intervened image. The annotator saw the prompt, the two images and one question with a closed label set. The condition was never displayed and the order was shuffled. Five experiments were labeled by three annotators (majority vote, with pairwise Cohen's κ of 0.71–0.80 pooled and 0.60–0.86 per experiment), five by one (marked †). A vision-language model<sup><a href="#ref-qwen">9</a></sup> relabeled all ten as a further rater, and every comparison keeps its direction under its labels.</p>
+      <div class="plate"><div class="card">
+        <div class="tablewrap">
+          <table class="data blind">
+          <thead><tr><th>Experiment</th><th>Grid<small>prompts × seeds × conditions</small></th><th>Measure</th><th>Graph-predicted condition</th><th>Control or comparison</th></tr></thead>
+          <tbody>
+          <tr><td><a href="#phases">Temporal causality</a></td><td>12 × 3 × 2</td><td>cat removed</td><td>steps 0–1: 72.2%</td><td>steps 2–3: 0%</td></tr>
+          <tr class="grp"><td><a href="#concept">Concept and context</a></td><td>16 × 3 × 6</td><td>identity stripped, shape kept</td><td>context: 87.5%</td><td>concept: 27.1%</td></tr>
+          <tr class="grp"><td></td><td></td><td>object replaced or removed</td><td>concept: 45.8%</td><td>context: 6.3%</td></tr>
+          <tr><td></td><td></td><td>recognizable bat left</td><td>both: 2.1%</td><td></td></tr>
+          <tr class="grp"><td><a href="#suppressor">Suppressor</a></td><td>12 × 3 × 4</td><td>cat appears (dog prompts)</td><td>joint: 36.1%</td><td>dog features alone: 2.8%, suppressor alone: 0%</td></tr>
+          <tr><td></td><td></td><td>cat removed (cat prompts)</td><td>cat features: 88.9%</td><td></td></tr>
+          <tr class="grp"><td><a href="#prior">Color prior</a> †</td><td>8 × 30 × 6</td><td>requested color</td><td>graph: 82.1%</td><td>co-activation: 76.7%</td></tr>
+          <tr><td></td><td></td><td>object destroyed</td><td>graph: 13.8%</td><td>co-activation: 21.7%</td></tr>
+          <tr><td><a href="#concept">Polysemy</a></td><td>10 × 3 × 2</td><td>baseball reading</td><td>α = +100: 70%</td><td>α = +30: 33%</td></tr>
+          <tr class="grp"><td><a href="#reflection">Reflections</a> †</td><td>17 × 5 × 3</td><td>surface intact (reflection removed)</td><td>layer 11: 86.4%</td><td>layer 12: 37.5%</td></tr>
+          <tr><td></td><td></td><td>image unchanged</td><td></td><td>control features: 100%</td></tr>
+          <tr class="grp"><td><a href="#space">Spatial composition</a></td><td>16 × 5 × 12</td><td>red object moves right</td><td>pair, α = 10: 85%</td><td>left suppressed, α = 10: 39%</td></tr>
+          <tr class="grp"><td></td><td></td><td>composition unchanged</td><td></td><td>reversed pair: 97.5%, pair at α = 3: 98.8%</td></tr>
+          <tr><td></td><td></td><td>image degraded</td><td></td><td>pair, α = 100: 92.5%</td></tr>
+          <tr><td><a href="#leakage">Color leakage</a> †</td><td>16 × 5 × 2</td><td>blue object turns red</td><td>α = +30: 25%, α = +100: 20%</td><td>surroundings turn red: 62.5% and 65%</td></tr>
+          <tr><td><a href="#counting">Counting</a> †</td><td>16 × 5 × 5</td><td>mean objects (five requested)</td><td>three+ 4.33, four+ 5.49, five+ 6.44, seven+ 8.05</td><td>baseline: 5.31</td></tr>
+          <tr class="grp"><td><a href="#failures">Negation</a> †</td><td>16 × 5 × 4</td><td>cat absent</td><td>emptiness amplified: 12.5%</td><td>no intervention: 8.75%, affirmative prompts: 1.25%</td></tr>
+          <tr><td></td><td></td><td></td><td></td><td>cat supernode suppressed: 100%</td></tr>
+          </tbody>
+          </table>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="ev" id="ev-limits">
+      <h3>Limitations</h3>
+      <ul class="limits">
+        <li><b>What a graph explains.</b> How the preactivation of one transcoder feature is assembled from earlier features, errors and input embeddings, at one position and step, but neither an image nor why the model attends where it does.</li>
+        <li><b>Double-stream MLPs only.</b> MLPs are the only components internal to one stream, which makes the per-stream decomposition well defined. Interventions are judged on the final image, so their effects also pass through blocks 16–18 and the 38 single-stream blocks, whose computation the graphs do not explain.</li>
+        <li><b>An exploratory search.</b> The case-study targets are not an independent sample, each intervention was run at one or two strengths (only the spatial pair was swept), the matched budget compares rules within this dictionary rather than SAE steering methods outside it, and five of the ten blind evaluations report one annotator's labels.</li>
+        <li><b>Three backbones, two analyses.</b> The temporal analysis and the matched-budget comparison were repeated on FLUX.1 [dev] and SD3.5-medium, the other case studies were not. On SD3.5-medium both hold in direction only, and its graphs are the least faithful of the three.</li>
+        <li><b>Dual use.</b> The control that fixes a color prior could as well insert or remove content against a user's or a provider's intent. The interventions need white-box access to an open-weight model.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="cite" class="band">
+  <div class="wrap">
+    <div class="prose">
+      <h2>Citation</h2>
+<pre class="bib" id="bibtex"><button class="btn small ghost" type="button" data-copy="bibtex-text">Copy</button><span id="bibtex-text">@inproceedings{mazur2026diffract,
+  title     = {{DifFRACT}: Diffusion Feature Reconstruction and Attribution for Circuit Tracing},
+  author    = {Mazur, Artyom and Konovalova, Nina and Alanov, Aibek},
+  booktitle = {The Fortieth Annual Conference on Neural Information Processing Systems},
+  year      = {2026},
+  url       = {https://arxiv.org/abs/2606.15796}
+}</span></pre>
+      <h3 style="margin-top:32px">References</h3>
+      <ol class="refs">
+        <li id="ref-flux">Black Forest Labs. <a href="https://github.com/black-forest-labs/flux">FLUX</a>. 2024.</li>
+        <li id="ref-ameisen">E. Ameisen, J. Lindsey, A. Pearce, et al. <a href="https://transformer-circuits.pub/2025/attribution-graphs/methods.html">Circuit tracing: Revealing computational graphs in language models</a>. Transformer Circuits Thread, 2025.</li>
+        <li id="ref-dunefsky">J. Dunefsky, P. Chlenski and N. Nanda. Transcoders find interpretable LLM feature circuits. Advances in Neural Information Processing Systems, 2024.</li>
+        <li id="ref-film">E. Perez, F. Strub, H. de Vries, et al. FiLM: Visual reasoning with a general conditioning layer. Proceedings of the AAAI Conference on Artificial Intelligence, 2018.</li>
+        <li id="ref-ediff">Y. Balaji, S. Nah, X. Huang, et al. <a href="https://arxiv.org/abs/2211.01324">eDiff-I: Text-to-Image Diffusion Models with an Ensemble of Expert Denoisers</a>. arXiv preprint arXiv:2211.01324, 2022.</li>
+        <li id="ref-guidance">T. Kynkäänniemi, M. Aittala, T. Karras, et al. Applying Guidance in a Limited Interval Improves Sample and Distribution Quality in Diffusion Models. Advances in Neural Information Processing Systems, 2024.</li>
+        <li id="ref-tinaz">B. Tinaz, Z. Fabian and M. Soltanolkotabi. Emergence and Evolution of Interpretable Concepts in Diffusion Models. Advances in Neural Information Processing Systems, 2025.</li>
+        <li id="ref-sd35">Stability AI. <a href="https://huggingface.co/stabilityai/stable-diffusion-3.5-medium">Stable Diffusion 3.5 Medium</a>. 2024.</li>
+        <li id="ref-qwen">Qwen Team. <a href="https://qwen.ai/blog?id=qwen3.6-35b-a3b">Qwen3.6-35B-A3B: Agentic Coding Power, Now Open to All</a>. 2026.</li>
+        <li id="ref-tide">V. S.-J. Huang, L. Zhuo, Y. Xin, et al. TIDE: Temporal-aware sparse autoencoders for interpretable diffusion transformers in image generation. Proceedings of the AAAI Conference on Artificial Intelligence, 2026.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+</main>
+
+</div>
+
+<script type="module" src="static/js/app.js"></script>
+<script>
+  // if the page's script did not load (a dropped connection), say so in the figures instead of leaving them empty
+  setTimeout(function () {
+    if (document.documentElement.dataset.app) return;
+    document.querySelectorAll("#hero-fig, [data-exhibit], [data-rows], [id^='fig-tempo-'], #fig-budget, #atlas, #launch").forEach(function (n) {
+      n.innerHTML = '<p class="state state-error">The interactive figures did not load. <button class="linkish" type="button" onclick="location.reload()">Reload the page</button></p>';
+    });
+  }, 9000);
+</script>
+<script type="module">
+  // the ten pairs of the replacement-model comparison
+  for (const [id, pre] of [["pairs-orig", "orig"], ["pairs-tc", "tc"]]) {
+    const box = document.getElementById(id);
+    for (let k = 0; k < 10; k++) {
+      const im = new Image();
+      im.loading = "lazy";
+      im.src = `static/img/figs/e2e/${pre}_${k}.webp`;
+      im.alt = pre === "orig" ? `Prompt ${k + 1}, original model` : `Prompt ${k + 1}, replacement model`;
+      box.append(im);
+    }
+  }
+</script>
+</body>
+</html>
